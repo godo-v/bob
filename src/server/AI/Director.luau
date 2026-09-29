@@ -5,7 +5,7 @@
 --
 --   local Director = require(ServerScriptService.AI.Director)
 --   Director.GameState.assignPlayer("MainOfficeGuard", player)  -- per role
---   Director.startNight(3, { Multiplayer = true })
+--   Director.startNight(3)
 --   Director.NightFailed:Connect(function(reason) ... end)
 --   Director.endNight()  -- at 6 AM
 --
@@ -13,7 +13,6 @@
 -- ReplicatedStorage.AIState.<Id> (Location, State, Target, ...) so camera
 -- systems can show them.
 
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local SharedAI = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("AI")
@@ -95,8 +94,6 @@ end
 -- Night control -------------------------------------------------------------------
 
 export type NightOptions = {
-	-- Wolf only appears in multiplayer. Defaults to "more than one player in the server".
-	Multiplayer: boolean?,
 	-- Roles in play this night. Offices whose role isn't listed are ignored.
 	-- Defaults to all four roles.
 	ActiveRoles: { string }?,
@@ -109,10 +106,6 @@ function Director.startNight(night: number, options: NightOptions?)
 	Director.endNight()
 
 	local opts: NightOptions = options or {}
-	local multiplayer = opts.Multiplayer
-	if multiplayer == nil then
-		multiplayer = #Players:GetPlayers() > 1
-	end
 	if opts.ResetGameState ~= false then
 		GameState.reset(opts.ActiveRoles)
 	end
@@ -121,7 +114,6 @@ function Director.startNight(night: number, options: NightOptions?)
 	for _, id in AIConfig.SpawnOrder do
 		local config = AIConfig.Animatronics[id]
 		local eligible = night >= config.ActiveFromNight
-			and (not config.MultiplayerOnly or multiplayer)
 			and (not config.RequiresRole or GameState.isRoleInPlay(config.RequiresRole))
 		if eligible then
 			local animatronic = CLASSES[id].new(id, Director)
@@ -130,7 +122,7 @@ function Director.startNight(night: number, options: NightOptions?)
 		end
 	end
 
-	Director.broadcast("NightStarted", { Night = night, Multiplayer = multiplayer })
+	Director.broadcast("NightStarted", { Night = night })
 end
 
 function Director.endNight()

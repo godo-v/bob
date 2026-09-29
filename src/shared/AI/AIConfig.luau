@@ -62,8 +62,9 @@ AIConfig.Animatronics = {
 		AttackWindow = perNight({ [1] = 8, [3] = 6, [5] = 4 }),
 	},
 
-	-- Random office each trip. Main Office: right door or window.
-	-- Patient Ward: window or left door.
+	-- Random office each trip. At the Main Office / Patient Ward it first stops
+	-- at the window to stare at the occupant (harmless, flashlight does nothing),
+	-- then on its next move goes to that office's door and attacks there.
 	Chicken = {
 		ActiveFromNight = 2,
 		AILevel = perNight({ [2] = 6, [3] = 9, [4] = 13, [5] = 16, [6] = 20 }),
@@ -71,19 +72,22 @@ AIConfig.Animatronics = {
 		StartRoom = "ShowStage",
 		Targets = {
 			"MainOffice.RightDoor",
-			"MainOffice.Window",
-			"PatientWardOffice.Window",
 			"PatientWardOffice.LeftDoor",
 			"ElectricalRoom.Hallway",
+		},
+		-- Door target -> window it stares through first.
+		WindowStops = {
+			["MainOffice.RightDoor"] = "MainOffice.Window",
+			["PatientWardOffice.LeftDoor"] = "PatientWardOffice.Window",
 		},
 		AttackWindow = perNight({ [2] = 8, [3] = 6, [5] = 4 }),
 	},
 
-	-- Multiplayer only. Any entrance of the Main Office / Patient Ward, or the
-	-- Electrical Hallway. Charges the Electrician when caught in their flashlight.
+	-- Any entrance of the Main Office / Patient Ward, or the Electrical Hallway.
+	-- In the hallway it charges the Electrician when caught in their flashlight,
+	-- or after HallwayWindow seconds if nobody checks.
 	Wolf = {
 		ActiveFromNight = 1,
-		MultiplayerOnly = true,
 		AILevel = perNight({ [1] = 4, [2] = 7, [3] = 10, [4] = 13, [5] = 16, [6] = 20 }),
 		MoveInterval = 5,
 		StartRoom = "ShowStage",
@@ -93,12 +97,16 @@ AIConfig.Animatronics = {
 			return keys
 		end)(),
 		AttackWindow = perNight({ [1] = 8, [3] = 6, [5] = 4 }),
+		HallwayWindow = perNight({ [1] = 20, [3] = 15, [5] = 10 }),
+		ChargeWhenSpotted = true,
+		ChargeWhenUnchecked = true,
 		ChargeHideWindow = 3,
 	},
 
 	-- Only goes for the Electrical Room. The Electrician sees it only in the
 	-- Electrical Hallway; the Main Office sees it on the main cameras.
-	-- Spotted in the hallway -> charges; Electrician has 3s to hide.
+	-- Spotted in the hallway, or left unchecked for HallwayWindow seconds ->
+	-- charges; Electrician has 3s to hide.
 	Fox = {
 		ActiveFromNight = 1,
 		RequiresRole = "Electrician",
@@ -109,9 +117,11 @@ AIConfig.Animatronics = {
 		Routes = {
 			["ElectricalRoom.Hallway"] = { "FoxDen", "Basement" },
 		},
-		-- How long the Fox waits unseen in the hallway before charging anyway.
+		-- How long it waits unseen in the hallway before charging anyway.
 		-- This is what forces the Electrician to check the hallway regularly.
-		AttackWindow = perNight({ [1] = 20, [3] = 15, [5] = 10 }),
+		HallwayWindow = perNight({ [1] = 20, [3] = 15, [5] = 10 }),
+		ChargeWhenSpotted = true,
+		ChargeWhenUnchecked = true,
 		ChargeHideWindow = 3,
 	},
 
@@ -134,8 +144,10 @@ AIConfig.Animatronics = {
 			StartRoom = "DrugRoom",
 			Targets = MapGraph.allEntrances({ "MainOffice", "PatientWardOffice", "ElectricalRoom" }),
 			AttackWindow = 3,
-			-- Fraction of power drained each time it reaches a door.
+			-- Fraction of an office's power drained each time a closed door stops it.
+			-- Only these offices lose power (never the Drug Room).
 			PowerDrainOnDoor = 0.25,
+			PowerDrainOffices = { "MainOffice", "PatientWardOffice" },
 			-- Other animatronics heading to the same office move this much faster.
 			BoostMultiplier = 1.75,
 		},
@@ -151,7 +163,7 @@ AIConfig.Animatronics = {
 		CheckInterval = 0.5,
 		-- Nurse workload is 0-1 (see GameState.setNurseWorkload).
 		WorkloadLimit = 1,
-		GracePeriod = 5,
+		GracePeriod = 15,
 		KillOrder = { "PatientWardNurse", "MainOfficeGuard", "DrugRoomGuard", "Electrician" },
 		KillInterval = 2.5,
 	},

@@ -22,9 +22,9 @@ GameState.RoleKilled = roleKilled.Event
 -- (powerKey: string, newValue: number) -- value is 0-1
 GameState.PowerChanged = powerChanged.Event
 
--- Power is one facility-wide pool by default. Set to false to give each
--- office its own pool.
-GameState.SharedPower = true
+-- Each office has its own power pool by default. Set to true to use one
+-- facility-wide pool instead.
+GameState.SharedPower = false
 
 local state = {
 	inPlay = {} :: { [string]: boolean },

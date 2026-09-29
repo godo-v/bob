@@ -7,7 +7,8 @@
 -- Released:
 --   * Kills the Drug Room Guard.
 --   * Can use any entrance of the Main Office, Patient Ward Office and Electrical Room.
---   * Drains 25% power each time it reaches a door.
+--   * Drains 25% of an office's power each time a closed door stops it
+--     (Main Office and Patient Ward Office only; never the Drug Room).
 --   * Uses the far more aggressive Released config.
 --   * Other animatronics heading to the same office move faster
 --     (Director.getSpeedMultiplier).
@@ -65,17 +66,21 @@ function TestDummy:waitForMoveOpportunity(): boolean
 	return Animatronic.waitForMoveOpportunity(self)
 end
 
-function TestDummy:onReachedEntrance(office: string, entranceName: string, entrance)
-	if self.Released and entrance.Kind == "Door" then
-		local amount = self:setting("PowerDrainOnDoor")
-		self.GameState.drainPower(office, amount)
-		self.Director.broadcast("PowerDrained", {
-			Animatronic = self.Id,
-			Office = office,
-			Entrance = entranceName,
-			Amount = amount,
-		})
+function TestDummy:onRepelled(office: string, entranceName: string, entrance)
+	if not self.Released or entrance.Kind ~= "Door" then
+		return
 	end
+	if not table.find(self:setting("PowerDrainOffices"), office) then
+		return
+	end
+	local amount = self:setting("PowerDrainOnDoor")
+	self.GameState.drainPower(office, amount)
+	self.Director.broadcast("PowerDrained", {
+		Animatronic = self.Id,
+		Office = office,
+		Entrance = entranceName,
+		Amount = amount,
+	})
 end
 
 function TestDummy:onBreach(office: string, entranceName: string)

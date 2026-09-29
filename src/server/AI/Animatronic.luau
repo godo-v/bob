@@ -7,7 +7,8 @@
 --   4. outcome        Repelled -> back to start; Breach -> kill occupant, back to start
 --
 -- Subclasses override the hook methods (onMoved, onReachedEntrance,
--- resolveEntrance, onSpotted, onBreach, setting) for their special rules.
+-- resolveEntrance, onSpotted, onRepelled, onBreach, setting) for their
+-- special rules.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -224,6 +225,7 @@ function Animatronic:attack()
 
 	if outcome == "Repelled" then
 		self.Director.broadcast("Repelled", { Animatronic = self.Id, Office = office, Entrance = entranceName })
+		self:onRepelled(office, entranceName, entrance)
 	elseif outcome == "Breach" then
 		self:onBreach(office, entranceName)
 	end
@@ -254,7 +256,7 @@ function Animatronic:resolveEntrance(office: string, entranceName: string, entra
 		end
 		return if flashed then "Repelled" else "Breach"
 	elseif entrance.Kind == "Hallway" then
-		local spotted = self:waitFor(window, function()
+		local spotted = self:waitFor(self:setting("HallwayWindow") or window, function()
 			return gameState.isFlashlightOn(role, location)
 		end)
 		if spotted == nil then
@@ -262,6 +264,10 @@ function Animatronic:resolveEntrance(office: string, entranceName: string, entra
 		end
 		if spotted then
 			return self:onSpotted(role)
+		end
+		-- Nobody checked the hallway in time.
+		if self:setting("ChargeWhenUnchecked") then
+			return self:charge(role)
 		end
 		return if gameState.isHiding(role) then "Repelled" else "Breach"
 	end
@@ -300,10 +306,16 @@ function Animatronic:onMoved() end
 
 function Animatronic:onReachedEntrance(_office: string, _entranceName: string, _entrance) end
 
--- Caught in the flashlight while in a hallway. Default: backs off.
-function Animatronic:onSpotted(_role: string): string?
+-- Caught in the flashlight while in a hallway. Backs off, unless
+-- ChargeWhenSpotted is set.
+function Animatronic:onSpotted(role: string): string?
+	if self:setting("ChargeWhenSpotted") then
+		return self:charge(role)
+	end
 	return "Repelled"
 end
+
+function Animatronic:onRepelled(_office: string, _entranceName: string, _entrance) end
 
 function Animatronic:onBreach(office: string, _entranceName: string)
 	self:killRole(MapGraph.occupantOf(office))

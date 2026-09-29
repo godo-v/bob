@@ -171,7 +171,7 @@ math.randomseed(42)
 
 -- 1. Bear, window never flashed: kills within 7s of reaching window on night 3
 reset(); only({ "Bear" })
-Director.startNight(3, { ActiveRoles = { "MainOfficeGuard" }, Multiplayer = false })
+Director.startNight(3, { ActiveRoles = { "MainOfficeGuard" } })
 runFor(400)
 local at, js = events("AtEntrance"), events("Jumpscare")
 check(#at > 0 and #js > 0, "Bear reaches window and kills")
@@ -185,14 +185,14 @@ check(#failed == 1 and failed[1].reason == "AllDead", "NightFailed AllDead when 
 
 -- 1b. Bear night 5 deadline 3s
 reset(); only({ "Bear" })
-Director.startNight(5, { ActiveRoles = { "MainOfficeGuard" }, Multiplayer = false })
+Director.startNight(5, { ActiveRoles = { "MainOfficeGuard" } })
 runFor(400)
 at, js = events("AtEntrance"), events("Jumpscare")
 check(#js > 0 and math.abs(js[1].t - at[1].t - 3) < 0.2, "Bear kill delay night 5 = 3s")
 
 -- 2. Bear flashed: never kills
 reset(); only({ "Bear" })
-Director.startNight(3, { ActiveRoles = { "MainOfficeGuard", "PatientWardNurse" }, Multiplayer = false })
+Director.startNight(3, { ActiveRoles = { "MainOfficeGuard", "PatientWardNurse" } })
 GameState.setFlashlightTarget("MainOfficeGuard", "MainOffice.Window")
 GameState.setFlashlightTarget("PatientWardNurse", "PatientWardOffice.Window")
 runFor(600)
@@ -200,7 +200,7 @@ check(#events("Jumpscare") == 0 and #events("Repelled") > 0, "Flashed Bear is re
 
 -- 3. Bunny targets vents; closed vents repel
 reset(); only({ "Bunny" })
-Director.startNight(1, { ActiveRoles = { "MainOfficeGuard", "PatientWardNurse" }, Multiplayer = false })
+Director.startNight(1, { ActiveRoles = { "MainOfficeGuard", "PatientWardNurse" } })
 GameState.setEntranceBlocked("MainOffice", "LeftVent", true)
 GameState.setEntranceBlocked("PatientWardOffice", "RightVent", true)
 runFor(1500)
@@ -214,47 +214,93 @@ check(#events("Jumpscare") == 0, "Closed vents stop Bunny")
 
 -- 4. Fox: electrician hides -> survives; no hide -> dies 3s after charge
 reset(); only({ "Fox" })
-Director.startNight(1, { ActiveRoles = { "Electrician" }, Multiplayer = false })
+Director.startNight(1, { ActiveRoles = { "Electrician" } })
 GameState.setHiding("Electrician", true)
 runFor(800)
 check(#events("Charge") > 0 and #events("Jumpscare") == 0, "Hiding Electrician survives Fox charges")
 reset(); only({ "Fox" })
-Director.startNight(1, { ActiveRoles = { "Electrician" }, Multiplayer = false })
+Director.startNight(1, { ActiveRoles = { "Electrician" } })
 GameState.setFlashlightTarget("Electrician", "ElectricalHallway")
 runFor(800)
 local ch = events("Charge"); js = events("Jumpscare"); at = events("AtEntrance")
 check(#ch > 0 and #js > 0 and math.abs(js[1].t - ch[1].t - 3) < 0.2, "Fox kills 3s after charge if not hiding")
 check(#at > 0 and math.abs(ch[1].t - at[1].t) < 0.2, "Fox charges immediately when spotted")
 
--- 5. Wolf is multiplayer only
+-- 5. Wolf spawns in any game and charges from the hallway when left unchecked
 reset(); only({ "Wolf" })
-Director.startNight(1, { Multiplayer = false })
-check(Director.getAnimatronic("Wolf") == nil, "Wolf absent in single player")
-Director.startNight(1, { Multiplayer = true })
-check(Director.getAnimatronic("Wolf") ~= nil, "Wolf present in multiplayer")
+Director.startNight(1, { ActiveRoles = { "Electrician" } })
+check(Director.getAnimatronic("Wolf") ~= nil, "Wolf spawns without multiplayer")
+runFor(1500)
+ch = events("Charge"); at = events("AtEntrance"); js = events("Jumpscare")
+check(#ch > 0 and math.abs(ch[1].t - at[1].t - 20) < 0.2, "Unchecked Wolf charges after 20s in hallway (night 1)")
+check(#js > 0 and math.abs(js[1].t - ch[1].t - 3) < 0.2, "Wolf kills 3s after charge if not hiding")
+
+-- 5b. Chicken stares through the window (harmless), then attacks the door
+reset(); only({ "Chicken" })
+Director.startNight(2, { ActiveRoles = { "MainOfficeGuard", "PatientWardNurse" } })
+runFor(3000)
+local stares, doorAttacks, windowAttacks, orderOk = 0, 0, 0, true
+local lastStare = {}
+for _, e in log do
+	if e.name == "Staring" then
+		stares += 1
+		lastStare[e.p.Office] = true
+	elseif e.name == "AtEntrance" then
+		if e.p.Kind == "Window" then windowAttacks += 1 end
+		if e.p.Kind == "Door" then
+			doorAttacks += 1
+			local expected = if e.p.Office == "MainOffice" then "RightDoor" else "LeftDoor"
+			if not lastStare[e.p.Office] or e.p.Entrance ~= expected then orderOk = false end
+			lastStare[e.p.Office] = nil
+		end
+	end
+end
+check(stares > 0 and doorAttacks > 0 and windowAttacks == 0, ("Chicken never attacks windows (stares=%d doors=%d)"):format(stares, doorAttacks))
+check(orderOk, "Chicken stares through window before each door attack (Main right / Ward left)")
 
 -- 6. Test Dummy: door open -> released, kills Drug guard, drains power, boosts
 reset(); only({ "TestDummy", "Bunny" })
-Director.startNight(1, { ActiveRoles = { "DrugRoomGuard", "MainOfficeGuard", "PatientWardNurse", "Electrician" }, Multiplayer = false })
+Director.startNight(1, { ActiveRoles = { "DrugRoomGuard", "MainOfficeGuard", "PatientWardNurse", "Electrician" } })
 GameState.setHiding("Electrician", true)
 runFor(600)
 local rel = events("TestDummyReleased")
 check(#rel == 1, "Test Dummy released when Drug Room door left open")
 local firstKill = events("Jumpscare")[1]
 check(firstKill and firstKill.p.Role == "DrugRoomGuard", "Released Test Dummy kills Drug Room Guard first")
+check(#events("PowerDrained") == 0, "No power drained when no door stops the Test Dummy")
+
+-- 6a. Released dummy stopped by doors drains only Main Office / Patient Ward
+reset(); only({ "TestDummy" })
+Director.startNight(1, { ActiveRoles = { "DrugRoomGuard", "MainOfficeGuard", "PatientWardNurse", "Electrician" } })
+GameState.setHiding("Electrician", true)
+for _, office in { "MainOffice", "PatientWardOffice" } do
+	for _, entrance in { "LeftDoor", "RightDoor", "LeftVent", "RightVent" } do
+		GameState.setEntranceBlocked(office, entrance, true)
+	end
+	GameState.setFlashlightTarget(if office == "MainOffice" then "MainOfficeGuard" else "PatientWardNurse", office .. ".Window")
+end
+runFor(1200)
 local drains = events("PowerDrained")
-check(#drains > 0 and drains[1].p.Amount == 0.25, "Released Test Dummy drains 25% power at doors")
+local drainOk = #drains > 0
+for _, d in drains do
+	if d.p.Amount ~= 0.25 or d.p.Entrance == "LeftVent" or d.p.Entrance == "RightVent"
+		or (d.p.Office ~= "MainOffice" and d.p.Office ~= "PatientWardOffice") then drainOk = false end
+end
+check(#events("TestDummyReleased") == 1, "Test Dummy released (Drug Room door open)")
+check(drainOk, ("Doors that stop the released dummy lose 25%% (drains=%d)"):format(#drains))
+check(GameState.getPower("DrugRoom") == 1 and GameState.getPower("ElectricalRoom") == 1, "Drug Room / Electrical Room power untouched")
+check(GameState.getPower("MainOffice") < 1 or GameState.getPower("PatientWardOffice") < 1, "Office power actually drained")
 
 -- 6b. Door closed -> never released
 reset(); only({ "TestDummy" })
-Director.startNight(1, { ActiveRoles = { "DrugRoomGuard" }, Multiplayer = false })
+Director.startNight(1, { ActiveRoles = { "DrugRoomGuard" } })
 GameState.setEntranceBlocked("DrugRoom", "Door", true)
 runFor(600)
 check(#events("TestDummyReleased") == 0 and #events("Repelled") > 3, "Closed Drug Room door holds Test Dummy")
 
 -- 6c. Boost multiplier
 reset(); only({ "TestDummy", "Bunny" })
-Director.startNight(1, { Multiplayer = false })
+Director.startNight(1, nil)
 local dummy = Director.getAnimatronic("TestDummy")
 local bunny = Director.getAnimatronic("Bunny")
 dummy.Released = true; dummy.TargetOffice = "MainOffice"
@@ -264,12 +310,12 @@ check(Director.getSpeedMultiplier("MainOffice", dummy) == 1, "Dummy doesn't boos
 
 -- 7. HR: overloaded nurse -> after grace, kills all in order, NightFailed
 reset(); only({ "HR" })
-Director.startNight(1, { Multiplayer = false })
+Director.startNight(1, nil)
 runFor(10)
 check(#events("HRReleased") == 0, "HR waits while nurse keeps up")
 GameState.setNurseWorkload(1)
-runFor(4)
-check(#events("HRReleased") == 0, "HR honours grace period")
+runFor(14)
+check(#events("HRReleased") == 0, "HR honours 15s grace period")
 runFor(20)
 local order = {}
 for _, e in events("Jumpscare") do table.insert(order, e.p.Role) end
@@ -278,21 +324,21 @@ check(#failed == 1 and failed[1].reason == "FacilityTerminated", "HR ends night 
 
 -- 7b. HR on nurse death
 reset(); only({ "HR" })
-Director.startNight(1, { Multiplayer = false })
+Director.startNight(1, nil)
 GameState.killRole("PatientWardNurse", "Test")
 runFor(20)
 check(#events("HRReleased") == 1, "HR released when nurse dies")
 
 -- 8. Full night 5 smoke test with everything, no defenses
 reset(); only({ "Bunny", "Chicken", "Bear", "Wolf", "Fox", "TestDummy", "HR" })
-Director.startNight(5, { Multiplayer = true })
+Director.startNight(5, nil)
 runFor(600)
 print("smoke: events", #log, "kills", #events("Jumpscare"), "failed", failed[1] and failed[1].reason)
 check(#failed == 1, "Full night ends in failure with no defense")
 
 -- 9. Warn electrician remote
 reset(); only({})
-Director.startNight(1, { Multiplayer = true })
+Director.startNight(1, nil)
 local guard, elec, other = { Name = "g" }, { Name = "e" }, { Name = "o" }
 GameState.assignPlayer("MainOfficeGuard", guard); GameState.assignPlayer("Electrician", elec)
 local remote = game.ReplicatedStorage.AIRemotes.WarnElectrician
