@@ -1,0 +1,23 @@
+{
+  "name": "bob",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "AI": {
+        "$path": "src/server/AI"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "AIClient": {
+          "$path": "src/client"
+        }
+      }
+    }
+  }
+}
