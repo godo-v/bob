@@ -19,12 +19,17 @@ local MapGraph = require(SharedAI:WaitForChild("MapGraph"))
 local Animatronic = {}
 Animatronic.__index = Animatronic
 
-function Animatronic.new(id: string, director)
-	local config = AIConfig.Animatronics[id]
-	assert(config, `No config for animatronic "{id}"`)
+-- kind:  behavior name / AIConfig key ("Bear")
+-- model: the tagged Model this behavior drives (optional)
+-- id:    unique name for this instance; defaults to the model's Name or kind
+function Animatronic.new(kind: string, director, model: Model?, id: string?)
+	local config = AIConfig.Animatronics[kind]
+	assert(config, `No config for animatronic "{kind}"`)
 
 	local self = setmetatable({}, Animatronic)
-	self.Id = id
+	self.Kind = kind
+	self.Id = id or (model and model.Name) or kind
+	self.Model = model
 	self.Config = config
 	self.Director = director
 	self.GameState = director.GameState
@@ -196,7 +201,7 @@ function Animatronic:advance()
 	if self.RouteIndex < #self.Route then
 		self.RouteIndex += 1
 		self:setLocation(self.Route[self.RouteIndex])
-		self.Director.broadcast("Moved", { Animatronic = self.Id, Location = self.Location })
+		self:emit("Moved", { Location = self.Location })
 		self:onMoved()
 	else
 		self:attack()
@@ -209,11 +214,10 @@ function Animatronic:attack()
 
 	self:setState("AtEntrance")
 	self:setLocation(MapGraph.entranceLocation(office, entranceName))
-	self.Director.broadcast("AtEntrance", {
-		Animatronic = self.Id,
+	self:emit("AtEntrance", {
 		Office = office,
 		Entrance = entranceName,
-		Kind = entrance.Kind,
+		EntranceKind = entrance.Kind,
 	})
 	self:onMoved()
 	self:onReachedEntrance(office, entranceName, entrance)
@@ -224,7 +228,7 @@ function Animatronic:attack()
 	end
 
 	if outcome == "Repelled" then
-		self.Director.broadcast("Repelled", { Animatronic = self.Id, Office = office, Entrance = entranceName })
+		self:emit("Repelled", { Office = office, Entrance = entranceName })
 		self:onRepelled(office, entranceName, entrance)
 	elseif outcome == "Breach" then
 		self:onBreach(office, entranceName)
@@ -280,7 +284,7 @@ end
 function Animatronic:charge(role: string): string?
 	local hideWindow = self:setting("ChargeHideWindow")
 	self:setState("Charging")
-	self.Director.broadcast("Charge", { Animatronic = self.Id, Role = role, HideWindow = hideWindow })
+	self:emit("Charge", { Role = role, HideWindow = hideWindow })
 	if not self:sleep(hideWindow) then
 		return nil
 	end
@@ -295,9 +299,18 @@ function Animatronic:killRole(role: string): boolean
 	if not self.GameState.isAlive(role) then
 		return false
 	end
-	self.Director.broadcast("Jumpscare", { Animatronic = self.Id, Role = role })
+	self:emit("Jumpscare", { Role = role })
 	self.GameState.killRole(role, self.Id)
 	return true
+end
+
+-- Broadcasts an AI event to all clients, tagged with who sent it.
+function Animatronic:emit(eventName: string, payload: { [string]: any }?)
+	local data = payload or {}
+	data.Animatronic = self.Id
+	data.Kind = self.Kind
+	data.Model = self.Model
+	self.Director.broadcast(eventName, data)
 end
 
 -- Hooks -------------------------------------------------------------------------

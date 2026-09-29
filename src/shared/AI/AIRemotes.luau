@@ -4,8 +4,11 @@
 --   WarnElectrician  client -> server  Main Office guard pings the Electrician
 --
 -- AIEvent names: NightStarted, NightEnded, AudioCue, Moved, AtEntrance,
--- Repelled, Charge, Jumpscare, TestDummyReleased, PowerDrained, HRReleased,
--- FacilityTerminated, ElectricianWarning.
+-- Staring, Repelled, Charge, Jumpscare, RoleKilled, TestDummyReleased,
+-- PowerDrained, HRReleased, FacilityTerminated, ElectricianWarning.
+--
+-- Events sent by an animatronic carry Animatronic (its id / model name),
+-- Kind ("Bear", ...) and Model (the tagged Model) in the payload.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")

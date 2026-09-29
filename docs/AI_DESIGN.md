@@ -19,6 +19,24 @@ How each kind of entrance is defended:
 
 Room names in `MapGraph.luau` are placeholders. Rename them to match your real camera and room names.
 
+## Attaching behaviors to models
+
+Behaviors attach to models through CollectionService tags. You can add tags in Studio's Tags section of the Properties window, or in code with `CollectionService:AddTag`.
+
+| Tag | On | Effect |
+|---|---|---|
+| `AI_Bear`, `AI_Bunny`, `AI_Weasel`, `AI_Wolf`, `AI_Fox`, `AI_TestDummy`, `AI_HR` | Model | The model runs that behavior. Each tagged model gets its own copy, and the model's Name is its AI id. |
+| `AIWaypoint` | BasePart or Attachment | Marks where a model stands for a location. The location is the `Location` attribute, or the part's Name if that isn't set. |
+
+- **Tagging mid-night.** A model tagged while a night is running starts right away. Removing the tag, or destroying the model, stops it.
+- **Missing models.** A behavior with no tagged model doesn't run, and a warning is printed.
+- **Moving models.** Models are moved with `PivotTo`, so keep them anchored. Each model goes back to its original spot when the night ends.
+- **Custom poses.** An `Animatronic` attribute on a waypoint (a kind like `Bear`, or a model name) reserves it for that animatronic, for example a Bear-specific window pose.
+- **Shared locations.** When several animatronics share a location, each takes a free generic waypoint if one exists.
+- **Missing waypoints.** If a location has no waypoint, the model stays where it was, and a warning is printed once.
+- **Model attributes.** Every move sets `AIKind`, `AIId`, `AILocation`, `AIState` and `AITarget` on the model, for animation and visual scripts.
+- **Event payloads.** Every AI event payload includes `Animatronic` (the id), `Kind` and `Model`. `AtEntrance` also carries `EntranceKind` (Door / Vent / Window / Hallway).
+
 ## Movement model
 
 Every `MoveInterval` seconds, each animatronic rolls 1–20. If the roll is at or below its `AILevel`, it moves one room along its route. After the last room it reaches the entrance and the attack window starts. When a trip ends, the animatronic goes back to its start room and picks a new random target.

@@ -10,13 +10,12 @@ local Animatronic = require(script.Parent.Parent.Animatronic)
 local Bear = setmetatable({}, { __index = Animatronic })
 Bear.__index = Bear
 
-function Bear.new(id: string, director)
-	return setmetatable(Animatronic.new(id, director), Bear)
+function Bear.new(kind: string, director, model: Model?, id: string?)
+	return setmetatable(Animatronic.new(kind, director, model, id), Bear)
 end
 
 function Bear:onMoved()
-	self.Director.broadcast("AudioCue", {
-		Animatronic = self.Id,
+	self:emit("AudioCue", {
 		Sound = self:setting("MoveSound"),
 		Volume = self:setting("MoveSoundVolume"),
 		Location = self.Location,

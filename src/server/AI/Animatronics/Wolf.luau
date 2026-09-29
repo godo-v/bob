@@ -11,8 +11,8 @@ local Animatronic = require(script.Parent.Parent.Animatronic)
 local Wolf = setmetatable({}, { __index = Animatronic })
 Wolf.__index = Wolf
 
-function Wolf.new(id: string, director)
-	return setmetatable(Animatronic.new(id, director), Wolf)
+function Wolf.new(kind: string, director, model: Model?, id: string?)
+	return setmetatable(Animatronic.new(kind, director, model, id), Wolf)
 end
 
 return Wolf

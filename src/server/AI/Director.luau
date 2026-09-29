@@ -9,10 +9,15 @@
 --   Director.NightFailed:Connect(function(reason) ... end)
 --   Director.endNight()  -- at 6 AM
 --
+-- Behaviors run on tagged models: tag a Model "AI_Bear" (AIConfig.tagFor) and
+-- it becomes a Bear. See ModelBinder for tags and waypoints.
+--
 -- Animatronic locations are replicated as attributes on
--- ReplicatedStorage.AIState.<Id> (Location, State, Target, ...) so camera
--- systems can show them.
+-- ReplicatedStorage.AIState.<Id> (Kind, Location, State, Target, ...) and on
+-- the model itself (AIKind, AILocation, AIState, ...) so camera systems can
+-- show them.
 
+local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local SharedAI = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("AI")
@@ -20,6 +25,7 @@ local AIConfig = require(SharedAI:WaitForChild("AIConfig"))
 local AIRemotes = require(SharedAI:WaitForChild("AIRemotes"))
 local MapGraph = require(SharedAI:WaitForChild("MapGraph"))
 local GameState = require(script.Parent.GameState)
+local ModelBinder = require(script.Parent.ModelBinder)
 
 local AnimatronicsFolder = script.Parent.Animatronics
 local CLASSES = {
@@ -42,6 +48,7 @@ Director.NightFailed = nightFailed.Event
 local remotes
 local stateFolder: Folder
 local active = {} -- [id] = animatronic
+local nightRunning = false
 local currentNight = 0
 local initialized = false
 local lastWarning = 0
@@ -66,9 +73,11 @@ function Director.publish(animatronic)
 		folder.Name = animatronic.Id
 		folder.Parent = stateFolder
 	end
+	folder:SetAttribute("Kind", animatronic.Kind)
 	for key, value in animatronic:getPublicState() do
 		folder:SetAttribute(key, value)
 	end
+	ModelBinder.sync(animatronic)
 end
 
 -- Cross-animatronic rules --------------------------------------------------------
@@ -76,15 +85,31 @@ end
 -- A Released Test Dummy speeds up every other animatronic heading to the
 -- office it is targeting.
 function Director.getSpeedMultiplier(office: string?, requester): number
-	local dummy = active.TestDummy
-	if office and dummy and dummy ~= requester and dummy.Released and dummy.TargetOffice == office then
-		return dummy:setting("BoostMultiplier")
+	if not office then
+		return 1
 	end
-	return 1
+	local multiplier = 1
+	for _, other in active do
+		if other ~= requester and other.Kind == "TestDummy" and other.Released and other.TargetOffice == office then
+			multiplier = math.max(multiplier, other:setting("BoostMultiplier"))
+		end
+	end
+	return multiplier
 end
 
+-- By id (the model's Name).
 function Director.getAnimatronic(id: string)
 	return active[id]
+end
+
+function Director.getAnimatronicsOfKind(kind: string): { any }
+	local result = {}
+	for _, animatronic in active do
+		if animatronic.Kind == kind then
+			table.insert(result, animatronic)
+		end
+	end
+	return result
 end
 
 function Director.getNight(): number
@@ -101,6 +126,54 @@ export type NightOptions = {
 	ResetGameState: boolean?,
 }
 
+local function isEligible(kind: string): boolean
+	local config = AIConfig.Animatronics[kind]
+	return currentNight >= config.ActiveFromNight
+		and (not config.RequiresRole or GameState.isRoleInPlay(config.RequiresRole))
+end
+
+local function isBound(model: Instance): boolean
+	for _, animatronic in active do
+		if animatronic.Model == model then
+			return true
+		end
+	end
+	return false
+end
+
+local function uniqueId(name: string): string
+	local id, n = name, 1
+	while active[id] do
+		n += 1
+		id = `{name}_{n}`
+	end
+	return id
+end
+
+local function spawnFor(kind: string, model: Instance)
+	if isBound(model) then
+		return
+	end
+	ModelBinder.bind(model)
+	local animatronic = CLASSES[kind].new(kind, Director, model, uniqueId(model.Name))
+	active[animatronic.Id] = animatronic
+	animatronic:start(currentNight)
+end
+
+local function despawnModel(model: Instance)
+	for id, animatronic in active do
+		if animatronic.Model == model then
+			animatronic:stop()
+			ModelBinder.unbind(animatronic)
+			active[id] = nil
+			local folder = stateFolder:FindFirstChild(id)
+			if folder then
+				folder:Destroy()
+			end
+		end
+	end
+end
+
 function Director.startNight(night: number, options: NightOptions?)
 	Director.init()
 	Director.endNight()
@@ -111,14 +184,16 @@ function Director.startNight(night: number, options: NightOptions?)
 	end
 
 	currentNight = night
-	for _, id in AIConfig.SpawnOrder do
-		local config = AIConfig.Animatronics[id]
-		local eligible = night >= config.ActiveFromNight
-			and (not config.RequiresRole or GameState.isRoleInPlay(config.RequiresRole))
-		if eligible then
-			local animatronic = CLASSES[id].new(id, Director)
-			active[id] = animatronic
-			animatronic:start(night)
+	nightRunning = true
+	for _, kind in AIConfig.SpawnOrder do
+		if isEligible(kind) then
+			local models = ModelBinder.getTaggedModels(kind)
+			if #models == 0 then
+				warn(`[AI] No Model tagged "{AIConfig.tagFor(kind)}"; {kind} will not run tonight`)
+			end
+			for _, model in models do
+				spawnFor(kind, model)
+			end
 		end
 	end
 
@@ -126,11 +201,13 @@ function Director.startNight(night: number, options: NightOptions?)
 end
 
 function Director.endNight()
-	local hadNight = next(active) ~= nil
+	local hadNight = nightRunning
+	nightRunning = false
 	for _, animatronic in active do
 		animatronic:stop()
 	end
 	table.clear(active)
+	ModelBinder.restoreAll()
 	if stateFolder then
 		stateFolder:ClearAllChildren()
 	end
@@ -172,20 +249,34 @@ function Director.init()
 			return
 		end
 		lastWarning = os.clock()
-		local id = if typeof(animatronicId) == "string" and AIConfig.Animatronics[animatronicId]
+		-- Accepts a kind ("Fox") or a model id ("Fox_2").
+		local id = if typeof(animatronicId) == "string"
+				and (AIConfig.Animatronics[animatronicId] or active[animatronicId])
 			then animatronicId
 			else nil
 		Director.sendToRole(MapGraph.Roles.Electrician, "ElectricianWarning", { Animatronic = id })
 	end)
 
+	-- Models tagged or untagged mid-night gain or lose their behavior right away.
+	for kind in CLASSES do
+		local tag = AIConfig.tagFor(kind)
+		CollectionService:GetInstanceAddedSignal(tag):Connect(function(instance)
+			if nightRunning and instance:IsA("Model") and isEligible(kind) then
+				spawnFor(kind, instance)
+			end
+		end)
+		CollectionService:GetInstanceRemovedSignal(tag):Connect(despawnModel)
+	end
+
 	GameState.RoleKilled:Connect(function(role: string, killer: string)
 		Director.broadcast("RoleKilled", { Role = role, Animatronic = killer })
 		-- HR ends the night itself once its kill order finishes.
-		local hr = active.HR
-		if hr and hr.State == "Released" then
-			return
+		for _, hr in Director.getAnimatronicsOfKind("HR") do
+			if hr.State == "Released" then
+				return
+			end
 		end
-		if next(active) ~= nil and not GameState.anyoneAlive() then
+		if nightRunning and not GameState.anyoneAlive() then
 			Director.endNight()
 			nightFailed:Fire("AllDead")
 		end

@@ -25,8 +25,8 @@ local DRUG_ROOM_GUARD = MapGraph.Roles.DrugRoomGuard
 local TestDummy = setmetatable({}, { __index = Animatronic })
 TestDummy.__index = TestDummy
 
-function TestDummy.new(id: string, director)
-	local self = setmetatable(Animatronic.new(id, director), TestDummy)
+function TestDummy.new(kind: string, director, model: Model?, id: string?)
+	local self = setmetatable(Animatronic.new(kind, director, model, id), TestDummy)
 	self.Released = false
 	return self
 end
@@ -53,7 +53,7 @@ function TestDummy:release()
 	end
 	self.Released = true
 	self.AILevel = self:setting("AILevel")
-	self.Director.broadcast("TestDummyReleased", { Animatronic = self.Id })
+	self:emit("TestDummyReleased")
 	self:killRole(DRUG_ROOM_GUARD)
 end
 
@@ -75,8 +75,7 @@ function TestDummy:onRepelled(office: string, entranceName: string, entrance)
 	end
 	local amount = self:setting("PowerDrainOnDoor")
 	self.GameState.drainPower(office, amount)
-	self.Director.broadcast("PowerDrained", {
-		Animatronic = self.Id,
+	self:emit("PowerDrained", {
 		Office = office,
 		Entrance = entranceName,
 		Amount = amount,

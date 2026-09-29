@@ -38,6 +38,15 @@ AIConfig.PollInterval = 0.1
 -- Start order when a night begins.
 AIConfig.SpawnOrder = { "Bunny", "Weasel", "Bear", "Wolf", "Fox", "TestDummy", "HR" }
 
+-- CollectionService tags. Tag a Model "AI_Bear" to give it the Bear behavior;
+-- tag parts/attachments "AIWaypoint" to mark where models stand (see ModelBinder).
+AIConfig.TagPrefix = "AI_"
+AIConfig.WaypointTag = "AIWaypoint"
+
+function AIConfig.tagFor(kind: string): string
+	return AIConfig.TagPrefix .. kind
+end
+
 AIConfig.Animatronics = {
 	-- Acts like Freddy: loud audio cue on every move. Ends at a window; must be
 	-- flashed within 7/5/3 seconds (nights 3/4/5+) or it kills the occupant.

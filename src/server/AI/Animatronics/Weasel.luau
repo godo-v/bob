@@ -14,8 +14,8 @@ local MapGraph = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("
 local Weasel = setmetatable({}, { __index = Animatronic })
 Weasel.__index = Weasel
 
-function Weasel.new(id: string, director)
-	local self = setmetatable(Animatronic.new(id, director), Weasel)
+function Weasel.new(kind: string, director, model: Model?, id: string?)
+	local self = setmetatable(Animatronic.new(kind, director, model, id), Weasel)
 	self.HasStared = false
 	return self
 end
@@ -33,7 +33,7 @@ function Weasel:attack()
 		self:setState("Staring")
 		self:setLocation(MapGraph.entranceLocation(office, entranceName))
 		-- Clients use this to pose the Weasel staring at the occupant.
-		self.Director.broadcast("Staring", { Animatronic = self.Id, Office = office, Entrance = entranceName })
+		self:emit("Staring", { Office = office, Entrance = entranceName })
 		return
 	end
 	Animatronic.attack(self)

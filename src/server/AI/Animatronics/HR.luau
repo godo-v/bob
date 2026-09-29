@@ -15,8 +15,8 @@ local NURSE = MapGraph.Roles.PatientWardNurse
 local HR = setmetatable({}, { __index = Animatronic })
 HR.__index = HR
 
-function HR.new(id: string, director)
-	local self = setmetatable(Animatronic.new(id, director), HR)
+function HR.new(kind: string, director, model: Model?, id: string?)
+	local self = setmetatable(Animatronic.new(kind, director, model, id), HR)
 	self.OverdueSince = nil
 	return self
 end
@@ -57,7 +57,7 @@ end
 
 function HR:terminate()
 	self:setState("Released")
-	self.Director.broadcast("HRReleased", { Animatronic = self.Id })
+	self:emit("HRReleased")
 	for _, role in self:setting("KillOrder") do
 		if self.GameState.isRoleInPlay(role) and self.GameState.isAlive(role) then
 			self:setLocation(MapGraph.officeOf(role) or role)

@@ -69,6 +69,11 @@ function methods.GetPlayers() return {} end
 function methods.Fire(self, ...) self.Event:fireAll(...) end
 function methods.FireAllClients(self, name, payload) table.insert(log, { t = now, name = name, p = payload }) end
 function methods.FireClient(self, player, name, payload) table.insert(log, { t = now, name = name, p = payload, to = player }) end
+function methods.IsA(self, className) return self.ClassName == className or (className == "BasePart" and self.ClassName == "Part") end
+function methods.GetPivot(self) return rawget(self, "_pivot") end
+local pivotHistory = {}
+function methods.PivotTo(self, cf) rawset(self, "_pivot", cf); table.insert(pivotHistory, { inst = self, cf = cf }) end
+function methods.Destroy(self) self.Parent = nil end
 
 function newInstance(className, name, parent)
 	local inst = setmetatable({ _methods = methods, _children = {}, _attributes = {}, ClassName = className }, InstanceMeta)
@@ -92,6 +97,40 @@ local Instance = { new = function(className) return newInstance(className) end }
 local game = newInstance("DataModel", "game")
 for _, svc in { "ReplicatedStorage", "ServerScriptService", "Players", "RunService", "Workspace", "StarterPlayer" } do
 	newInstance("Service", svc, game)
+end
+
+-- CollectionService mock
+local tagged, addedSignals, removedSignals = {}, {}, {}
+local function signalFor(map, tag) map[tag] = map[tag] or newSignal() return map[tag] end
+local CollectionService = {}
+function CollectionService:GetTagged(tag) return table.clone(tagged[tag] or {}) end
+function CollectionService:GetInstanceAddedSignal(tag) return signalFor(addedSignals, tag) end
+function CollectionService:GetInstanceRemovedSignal(tag) return signalFor(removedSignals, tag) end
+function CollectionService:AddTag(inst, tag)
+	tagged[tag] = tagged[tag] or {}
+	if table.find(tagged[tag], inst) then return end
+	table.insert(tagged[tag], inst)
+	signalFor(addedSignals, tag):fireAll(inst)
+end
+function CollectionService:RemoveTag(inst, tag)
+	local list = tagged[tag] or {}
+	local i = table.find(list, inst)
+	if i then table.remove(list, i); signalFor(removedSignals, tag):fireAll(inst) end
+end
+game._children.CollectionService = CollectionService
+
+local function newModel(name, tag)
+	local model = newInstance("Model", name, game.Workspace)
+	model:PivotTo("Origin_" .. name)
+	if tag then CollectionService:AddTag(model, tag) end
+	return model
+end
+local function newWaypoint(name, attrs)
+	local part = newInstance("Part", name, game.Workspace)
+	part:PivotTo("CF_" .. name .. (attrs and attrs.Animatronic and ("_" .. attrs.Animatronic) or ""))
+	for k, v in attrs or {} do part:SetAttribute(k, v) end
+	CollectionService:AddTag(part, "AIWaypoint")
+	return part
 end
 
 -- Build module tree from SOURCES
@@ -125,7 +164,7 @@ local function req(m)
 	local env = setmetatable({
 		script = m, game = game, require = req, task = task, Instance = Instance,
 		os = { clock = function() return now end },
-		warn = function(...) print("WARN", ...) end,
+		warn = function() end, -- expected "no model / no waypoint" warnings
 		typeof = function(v) return type(v) end,
 	}, { __index = baseEnv })
 	setfenv(fn, env)
@@ -153,18 +192,19 @@ local function events(name)
 	for _, e in log do if e.name == name then table.insert(out, e) end end
 	return out
 end
-local function only(ids)
-	local keep = {}
-	for _, id in ids do keep[id] = true end
-	local order = {}
-	for _, id in { "Bunny", "Weasel", "Bear", "Wolf", "Fox", "TestDummy", "HR" } do
-		if keep[id] then table.insert(order, id) end
+-- Tags exactly one model per listed kind; everything else is untagged.
+local function only(kinds)
+	for tag, list in tagged do
+		if string.sub(tag, 1, 3) == "AI_" then
+			for _, inst in table.clone(list) do CollectionService:RemoveTag(inst, tag) end
+		end
 	end
-	AIConfig.SpawnOrder = order
+	for _, kind in kinds do newModel(kind, "AI_" .. kind) end
 end
+local anyFail = false
 local function check(cond, msg)
 	print((cond and "PASS " or "FAIL ") .. msg)
-	if not cond then _G.anyFail = true end
+	if not cond then anyFail = true end
 end
 
 math.randomseed(42)
@@ -246,8 +286,8 @@ for _, e in log do
 		stares += 1
 		lastStare[e.p.Office] = true
 	elseif e.name == "AtEntrance" then
-		if e.p.Kind == "Window" then windowAttacks += 1 end
-		if e.p.Kind == "Door" then
+		if e.p.EntranceKind == "Window" then windowAttacks += 1 end
+		if e.p.EntranceKind == "Door" then
 			doorAttacks += 1
 			local expected = if e.p.Office == "MainOffice" then "RightDoor" else "LeftDoor"
 			if not lastStare[e.p.Office] or e.p.Entrance ~= expected then orderOk = false end
@@ -349,4 +389,37 @@ remote.OnServerEvent:fireAll(guard, "Fox")
 local w = events("ElectricianWarning")
 check(#w == 1 and w[1].to == elec and w[1].p.Animatronic == "Fox", "WarnElectrician relays once (guard only, cooldown)")
 
-print(_G.anyFail and "SOME TESTS FAILED" or "ALL TESTS PASSED")
+-- 10. Tag binding
+reset(); only({})
+local bearA = newModel("BearA", "AI_Bear")
+local bearB = newModel("BearB", "AI_Bear")
+local untagged = newModel("Statue")
+newWaypoint("ShowStage")
+newWaypoint("ShowStage")
+newWaypoint("MainOffice.Window", { Animatronic = "Bear" })
+newWaypoint("Courtyard")
+Director.startNight(3, { ActiveRoles = { "MainOfficeGuard" } })
+check(#Director.getAnimatronicsOfKind("Bear") == 2, "Each model tagged AI_Bear gets its own Bear behavior")
+check(Director.getAnimatronic("BearA").Model == bearA and Director.getAnimatronic("BearB").Model == bearB, "Behaviors keyed by model name")
+check(bearA:GetPivot() == "CF_ShowStage" and bearB:GetPivot() == "CF_ShowStage", "Models pivot to start-room waypoints")
+check(untagged:GetPivot() == "Origin_Statue", "Untagged models are left alone")
+check(bearA:GetAttribute("AIKind") == "Bear" and bearA:GetAttribute("AILocation") == "ShowStage", "Model gets AIKind / AILocation attributes")
+GameState.setFlashlightTarget("MainOfficeGuard", "MainOffice.Window")
+runFor(600)
+local sawWindowPose = false
+for _, h in pivotHistory do
+	if (h.inst == bearA or h.inst == bearB) and h.cf == "CF_MainOffice.Window_Bear" then sawWindowPose = true end
+end
+check(sawWindowPose, "Kind-specific waypoint used at the window")
+local fox = newModel("Fox")
+CollectionService:AddTag(fox, "AI_Fox")
+check(Director.getAnimatronic("Fox") == nil, "Fox tagged mid-night without Electrician in play doesn't spawn")
+local bunny = newModel("LateBunny")
+CollectionService:AddTag(bunny, "AI_Bunny")
+check(Director.getAnimatronic("LateBunny") ~= nil, "Model tagged mid-night starts its behavior")
+CollectionService:RemoveTag(bunny, "AI_Bunny")
+check(Director.getAnimatronic("LateBunny") == nil, "Removing the tag stops the behavior")
+Director.endNight()
+check(bearA:GetPivot() == "Origin_BearA" and bearB:GetPivot() == "Origin_BearB", "Models return to original pivot at night end")
+
+print(anyFail and "SOME TESTS FAILED" or "ALL TESTS PASSED")
