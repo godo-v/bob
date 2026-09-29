@@ -157,7 +157,7 @@ local function only(ids)
 	local keep = {}
 	for _, id in ids do keep[id] = true end
 	local order = {}
-	for _, id in { "Bunny", "Chicken", "Bear", "Wolf", "Fox", "TestDummy", "HR" } do
+	for _, id in { "Bunny", "Weasel", "Bear", "Wolf", "Fox", "TestDummy", "HR" } do
 		if keep[id] then table.insert(order, id) end
 	end
 	AIConfig.SpawnOrder = order
@@ -235,8 +235,8 @@ ch = events("Charge"); at = events("AtEntrance"); js = events("Jumpscare")
 check(#ch > 0 and math.abs(ch[1].t - at[1].t - 20) < 0.2, "Unchecked Wolf charges after 20s in hallway (night 1)")
 check(#js > 0 and math.abs(js[1].t - ch[1].t - 3) < 0.2, "Wolf kills 3s after charge if not hiding")
 
--- 5b. Chicken stares through the window (harmless), then attacks the door
-reset(); only({ "Chicken" })
+-- 5b. Weasel stares through the window (harmless), then attacks the door
+reset(); only({ "Weasel" })
 Director.startNight(2, { ActiveRoles = { "MainOfficeGuard", "PatientWardNurse" } })
 runFor(3000)
 local stares, doorAttacks, windowAttacks, orderOk = 0, 0, 0, true
@@ -255,8 +255,8 @@ for _, e in log do
 		end
 	end
 end
-check(stares > 0 and doorAttacks > 0 and windowAttacks == 0, ("Chicken never attacks windows (stares=%d doors=%d)"):format(stares, doorAttacks))
-check(orderOk, "Chicken stares through window before each door attack (Main right / Ward left)")
+check(stares > 0 and doorAttacks > 0 and windowAttacks == 0, ("Weasel never attacks windows (stares=%d doors=%d)"):format(stares, doorAttacks))
+check(orderOk, "Weasel stares through window before each door attack (Main right / Ward left)")
 
 -- 6. Test Dummy: door open -> released, kills Drug guard, drains power, boosts
 reset(); only({ "TestDummy", "Bunny" })
@@ -330,7 +330,7 @@ runFor(20)
 check(#events("HRReleased") == 1, "HR released when nurse dies")
 
 -- 8. Full night 5 smoke test with everything, no defenses
-reset(); only({ "Bunny", "Chicken", "Bear", "Wolf", "Fox", "TestDummy", "HR" })
+reset(); only({ "Bunny", "Weasel", "Bear", "Wolf", "Fox", "TestDummy", "HR" })
 Director.startNight(5, nil)
 runFor(600)
 print("smoke: events", #log, "kills", #events("Jumpscare"), "failed", failed[1] and failed[1].reason)

@@ -7,7 +7,7 @@ Players hold one of four roles in a facility over a series of nights:
 - **Electrician**: Electrical Room. Shines a light down the Electrical Hallway and hides when charged.
 - **Drug Room Guard**: keeps the Test Dummy out of the Drug Room.
 
-Animatronics: Bear (night 3+), Bunny (1+), Chicken (2+), Wolf (1+), Fox (1+), Test Dummy (1+), HR (1+).
+Animatronics: Bear (night 3+), Bunny (1+), Weasel (2+), Wolf (1+), Fox (1+), Test Dummy (1+), HR (1+).
 The full behavior spec and open assumptions are in `docs/AI_DESIGN.md`.
 
 ## Code layout (Rojo, `default.project.json`)

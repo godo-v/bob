@@ -36,7 +36,7 @@ AIConfig.MaxAILevel = 20
 AIConfig.PollInterval = 0.1
 
 -- Start order when a night begins.
-AIConfig.SpawnOrder = { "Bunny", "Chicken", "Bear", "Wolf", "Fox", "TestDummy", "HR" }
+AIConfig.SpawnOrder = { "Bunny", "Weasel", "Bear", "Wolf", "Fox", "TestDummy", "HR" }
 
 AIConfig.Animatronics = {
 	-- Acts like Freddy: loud audio cue on every move. Ends at a window; must be
@@ -65,7 +65,7 @@ AIConfig.Animatronics = {
 	-- Random office each trip. At the Main Office / Patient Ward it first stops
 	-- at the window to stare at the occupant (harmless, flashlight does nothing),
 	-- then on its next move goes to that office's door and attacks there.
-	Chicken = {
+	Weasel = {
 		ActiveFromNight = 2,
 		AILevel = perNight({ [2] = 6, [3] = 9, [4] = 13, [5] = 16, [6] = 20 }),
 		MoveInterval = 5,
